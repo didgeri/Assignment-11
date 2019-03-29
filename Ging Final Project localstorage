@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<script src="https://code.jquery.com/jquery-3.3.1.min.js" integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8=" crossorigin="anonymous"></script>
+</head>
+<body style="background-color:gainsboro;">
+
+<h1>
+  Ging Concert Calendar Program
+</h1>
+
+<script>
+
+savedEvents = new Array();
+
+/*
+Empty Form Check,
+just checks if there is any info in the search form, then calls all the functions needed to get results and format them
+*/
+function validateForm() {
+  var empty_check = document.getElementById("search_input").value;
+  if (empty_check == "") {
+    alert("No empty fields!");
+    return false;
+  }
+  else
+  {
+	q = empty_check; //assign the value of the input to the thing we are going to search the API's for
+	SearchChecker();
+	SeatgeekResults();
+	ticketmasterResults();
+	listsummed = SeatgeekResults.listsg.concat(ticketmasterResults.listtm);
+	var new_Event_Search_Results = document.getElementById("new_Event_Search_Results");
+	var totalReturn = document.getElementById("totalReturn");
+	totalReturn.innerHTML = "There are " + listsummed.length + " events in your search.";
+	var displayList = "<table><tr><th>Who</th><th>When</th><th>Where</th><th>&nbsp;</th></tr>";
+	for (var x=0;x<listsummed.length;x++)
+	{
+		var listItem = '<tr><td>' + listsummed[x]._title + "</td><td>" + listsummed[x]._date + "</td><td>" + listsummed[x]._venue + "</td><td>" + '<button onclick="addToMyList(' + x + ')">Add to my list</button></td></tr>';
+		displayList += listItem;
+	}
+	displayList += '</table>'
+	new_Event_Search_Results.innerHTML = displayList;
+  }
+}
+
+  /*
+  General API collector script,
+  should include Event Class to compare info from different API's to create new Event objects.
+  */
+  var q;
+  var qtype;
+  var listsummed = new Array();
+
+  //find out what type of search we are doing, and set qtype for use in the API's
+  function SearchChecker() {
+    var x = document.getElementById("radio_artist").checked;
+      if (x == true) {qtype = "performers";}
+  	var y = document.getElementById("radio_date").checked;
+      if (y == true) {qtype = "datetime"}
+  	var z = document.getElementById("radio_venue").checked;
+      if (z == true) {qtype = "venue"}
+}
+
+  //EVENT CLASS PROTOTYPE
+  class Event{
+    constructor(title, date, venue) {
+    this._title = title;
+    this._date = date;
+    this._venue = venue;
+  }
+  //  isUnique(other_event) {
+  //    return this._date === other_event._date;
+    //}
+  }
+
+
+  /*
+  Seatgeek API collector script,
+  which is used by the API collector to create event objects using the Event class.
+  */
+  SeatgeekResults.listsg = new Array();
+  ticketmasterResults.listtm = new Array();
+  function SeatgeekResults()
+  {
+    var artist_photo
+    var qtypesg = qtype
+    if (qtype == "performers") {qtypesg = "performers.slug";}
+  $.ajax({
+    url: 'https://api.seatgeek.com/2/events?client_id=MTU4NjQ1NzJ8MTU1MzI0OTE1OS4wMw&' + qtypesg + '=' + q,
+    async:false,
+    type: "GET",
+    data:{
+      },
+      success: function(json)
+      {
+        var eventssg = json.events;
+        for (var x=0;x<eventssg.length;x++)
+        {
+			let show = new Event(eventssg[x].title, eventssg[x].datetime_local, eventssg[x].venue.name);
+			SeatgeekResults.listsg.push(show);
+      Artist_pic.innerHTML = artist_photo;
+      artist_photo = "<img src=" + eventssg[0].performers[0].image + ">";
+        };
+        }
+    });
+  }
+
+  /*
+  ticketmaster API collector,
+  which is used by the API collector to create event objects using the event class.
+  */
+
+  function ticketmasterResults()
+  {
+    var qtypetm = qtype
+    if (qtype == "date") {qtypetm = "localdate";}
+    if (qtype == "performers") {qtypetm = "keyword";}
+    if (qtype == "venue") {qtypetm = "locale";}
+  $.ajax({
+      type:"GET",
+      url:"https://app.ticketmaster.com/discovery/v2/events.json?size=1&apikey=ZOeiYREEeuXdrGatUjE0oQQydpOG8XrL&" + qtypetm + "=" + q,
+      async:false,
+      dataType: "json",
+      success: function(json) {
+        var eventstm = json._embedded.events;
+        for (var x=0; x<eventstm.length; x++)
+        {
+			let show = new Event(eventstm[x].name, eventstm[x].dates.start.localDate + " " + eventstm[x].dates.start.localTime, eventstm[x]._embedded.venues[0].name);
+			ticketmasterResults.listtm.push(show);
+        };
+        //new_Event_Search_Results.innerHTML = list;
+        //totalReturn.innerHTML = "There are " + events.length + " events total.";
+        //json.events[0].title;
+  }});
+  }
+
+
+  //These are the functions to compare the two event lists and delete duplicates.
+  function compareListsA()
+  {
+    var y
+    var x = 0
+    for (var x=0; y<listtm.length; x++){
+      if (SeatgeekResults.listsg[x]._artist == ticketmasterResults.listtm[y]._artist && SeatgeekResults.listsg[x]._date == ticketmasterResults.listtm[y]._date) {delete SeatgeekResults.listsg[x]};
+      if (x>=SeatgeekResults.listsg.length) {y++, x=0};
+    }
+  }
+
+  function compareListsB()
+  {
+    var y
+    var x = 0
+    for (var x=0; y<SeatgeekResults.listsg.length; x++){
+      if (ticketmasterResults.listtm[x].artist == SeatgeekResults.listsg[y].artist && ticketmasterResults.listtm[x].date == SeatgeekResults.listsg[y]) {delete ticketmasterResults.listtm[x]};
+      if (x>=listtm.length) {y++, x=0};
+    }
+  }
+
+
+
+</script>
+
+  <fieldset>
+    <legend>New Events Search:</legend>
+    Input a search value <small>(Artists or venue or date...Use dashes in place of spaces)</small><br>
+    <input id="search_input" type="text" name="search_input" value="Switchfoot">
+    <button onclick="validateForm()">Submit</button><br>
+    <input id="radio_artist" type="radio" name="search_event_property" value="Artist" checked>Artist<br>
+    <input id="radio_venue" type="radio" name="search_event_property" value="Venue"> Venue<br>
+    <input id="radio_date" type="radio" name="search_event_property" value="Date"> Date
+    <small>(Dates must be YYYY-MM-DD format, including dashes.)</small>
+  </fieldset>
+<br>
+
+<h2>
+Search Results
+</h2>
+  <div id="Artist_pic" align="left">
+  </div>
+  <div id="new_Event_Search_Results">
+      Your search results will appear here.
+  </div>
+  <br><div id="totalReturn">
+  </div>
+<br>
+
+<h2>
+  My Events Calendar
+</h2>
+  <div id="My_Events_Calendar">
+      You currently have no saved events loaded into the calendar.
+  </div>
+
+<script>
+	function addToMyList(index)
+	{
+		var exists = false;
+		if (savedEvents === null){ savedEvents = new Array();}
+		var event = listsummed[index];
+		for (var x=0;x<savedEvents.length;x++)
+		{
+			if (savedEvents[x]._title == event._title && savedEvents[x]._date == event._date && savedEvents[x]._venue == event._venue) {exists = true;}
+		}
+		if (!exists)
+		{
+			savedEvents.push(event);
+		}
+		window.localStorage.setItem("SavedEvents",JSON.stringify(savedEvents));
+		var displaySavedList = "<table><tr><th>Who</th><th>When</th><th>Where</th><th>&nbsp;</th></tr>";
+		for (var x=0;x<savedEvents.length;x++)
+		{
+			var listItem = '<tr><td>' + savedEvents[x]._title + "</td><td>" + savedEvents[x]._date + "</td><td>" + savedEvents[x]._venue + "</td><td>" + '<button onclick="removeFromMyList(' + x + ')">Remove</button></td></tr>';
+			displaySavedList += listItem;
+		}
+		displaySavedList += '</table>';
+		$("#My_Events_Calendar").html(displaySavedList);
+	}
+	function removeFromMyList(index)
+	{
+		savedEvents.splice(index,1);
+		window.localStorage.setItem("SavedEvents",JSON.stringify(savedEvents));
+		var displaySavedList = "<table><tr><th>Who</th><th>When</th><th>Where</th><th>&nbsp;</th></tr>";
+		for (var x=0;x<savedEvents.length;x++)
+		{
+			var listItem = '<tr><td>' + savedEvents[x]._title + "</td><td>" + savedEvents[x]._date + "</td><td>" + savedEvents[x]._venue + "</td><td>" + '<button onclick="removeFromMyList(' + x + ')">Remove</button></td></tr>';
+			displaySavedList += listItem;
+		}
+		displaySavedList += '</table>';
+		$("#My_Events_Calendar").html(displaySavedList);
+	}
+	function loadSavedList()
+	{
+		savedEvents = JSON.parse(window.localStorage.getItem("SavedEvents"));
+		if (savedEvents === null)
+		{
+			$("#My_Events_Calendar").html("You currently have no saved events loaded into the calendar.");
+		}
+		else
+		{
+			var displaySavedList = "<table><tr><th>Who</th><th>When</th><th>Where</th><th>&nbsp;</th></tr>";
+			for (var x=0;x<savedEvents.length;x++)
+			{
+				var listItem = '<tr><td>' + savedEvents[x]._title + "</td><td>" + savedEvents[x]._date + "</td><td>" + savedEvents[x]._venue + "</td><td>" + '<button onclick="removeFromMyList(' + x + ')">Remove</button></td></tr>';
+				displaySavedList += listItem;
+			}
+			displaySavedList += '</table>';
+			$("#My_Events_Calendar").html(displaySavedList);
+		}
+	}
+
+	loadSavedList();
+</script>
+</body>
+</html>
